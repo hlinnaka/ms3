@@ -7,7 +7,7 @@ import shutil
 import socket
 import hashlib
 import logging
-import urlparse
+import urllib.parse
 import tornado.web
 import tornado.ioloop
 import tornado.httpserver
@@ -46,10 +46,10 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header('Content-Type', 'text/plain')
         request = self.request
         _logger.debug("Request headers")
-        for key, value in request.headers.iteritems():
+        for key, value in request.headers.items():
             _logger.debug("\t%s: %s", key, value)
         _logger.debug("Request arguments")
-        for key, value in self.request.arguments.iteritems():
+        for key, value in self.request.arguments.items():
             _logger.debug("\t%s: %s" % (key, value))
         props = ["method", "uri", "body"]
         for key in props:
@@ -202,7 +202,7 @@ class ObjectHandler(BaseHandler):
                     self.render_xml(response)
             else:
                 _logger.warn("Not accepting 0 bytes files")
-                self.set_header('ETag', '"%s"' % hashlib.md5("").hexdigest())
+                self.set_header('ETag', '"%s"' % hashlib.md5(b'').hexdigest())
         else:
             entry = bucket.set_entry(key, self.request.body)
             self.set_header('ETag', '"%s"' % entry.etag)
@@ -225,50 +225,6 @@ class ObjectHandler(BaseHandler):
             return
         bucket.delete_entry(key, version_id=version_id)
         self.set_status(204)
-
-
-def fix_TCPServer_handle_connection():
-    """ Monkey-patching tornado to increase the maxium file size to 1.5 GB """
-    import tornado.netutil
-    from tornado.iostream import SSLIOStream, IOStream
-    import ssl
-
-    max_buffer_size = 1536 * 1024 * 1024  # 1.5GB
-    read_chunk_size = 64 * 1024
-
-    def _handle_connection(self, connection, address):
-        if self.ssl_options is not None:
-            assert ssl, "Python 2.6+ and OpenSSL required for SSL"
-            try:
-                connection = ssl.wrap_socket(connection,
-                                             server_side=True,
-                                             do_handshake_on_connect=False,
-                                             **self.ssl_options)
-            except ssl.SSLError, err:
-                if err.args[0] == ssl.SSL_ERROR_EOF:
-                    return connection.close()
-                else:
-                    raise
-            except socket.error, err:
-                if err.args[0] == errno.ECONNABORTED:
-                    return connection.close()
-                else:
-                    raise
-        try:
-            if self.ssl_options is not None:
-                stream = SSLIOStream(connection, io_loop=self.io_loop,
-                                     max_buffer_size=max_buffer_size,
-                                     read_chunk_size=read_chunk_size)
-            else:
-                stream = IOStream(connection, io_loop=self.io_loop,
-                                  max_buffer_size=max_buffer_size,
-                                  read_chunk_size=read_chunk_size)
-            self.handle_stream(stream, address)
-        except Exception:
-            _logger.error("Error in connection callback", exc_info=True)
-
-    tornado.netutil.TCPServer._handle_connection = _handle_connection
-
 
 class MS3App(tornado.web.Application):
     """ """
@@ -297,7 +253,6 @@ class MS3App(tornado.web.Application):
             except (OSError, IOError) as exception:
                 _logger.warn("Tried to create %s: %s", self.datadir, exception)
         tornado.web.Application.__init__(self, handlers, **settings)
-        fix_TCPServer_handle_connection()
 
 
 def run(args=None):
@@ -312,8 +267,11 @@ def run(args=None):
             'ca_certs': options.cafile
         }
 
+    max_buffer_size = 1536 * 1024 * 1024  # 1.5GB
+
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True,
-                                                ssl_options=ssl_options)
+                                                ssl_options=ssl_options,
+                                                max_buffer_size=max_buffer_size)
     http_server.listen(options.port)
     _logger.info("Using configuration file %s", options.config)
     _logger.info("Using data directory %s", app.datadir)

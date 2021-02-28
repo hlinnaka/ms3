@@ -13,7 +13,7 @@ XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 def t(tag, text, **attrs):
     """ Shorthand for creating an XML element with the provided text """
     element = lxml.etree.Element(tag, **attrs)
-    if not isinstance(text, basestring):
+    if not isinstance(text, str):
         text = str(text)
     element.text = text
     return element
@@ -102,7 +102,7 @@ class BucketEntry(Entry):
     """ Represents an object (key) in AWS terminology """
     @property
     def etag(self):
-        with open(self.complete_path, "r") as fp:
+        with open(self.complete_path, "rb") as fp:
             return hashlib.md5(fp.read()).hexdigest()
 
     def _complete_metadata(self):
@@ -248,7 +248,7 @@ class Bucket(Entry):
             key = "%s.%.6f" % (key, time.time())
         entry_path = os.path.join(self.complete_path, key)
         make_entry_dir(entry_path)
-        with open(entry_path, "w") as fp:
+        with open(entry_path, "wb") as fp:
             fp.write(value)
         return BucketEntry(key, self.complete_path)
 
