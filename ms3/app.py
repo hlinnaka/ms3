@@ -234,6 +234,7 @@ class MS3App(tornado.web.Application):
 
         handlers = [
             (r"/", ListAllMyBucketsHandler),
+            (r"/([^/]+)", BucketHandler),
             (r"/([^/]+)/", BucketHandler),
             (r"/([^/]+)/(.+)", ObjectHandler),
             (r"/.*", CatchAllHandler)
